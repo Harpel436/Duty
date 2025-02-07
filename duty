@@ -1,0 +1,50 @@
+import logging
+import importlib
+import config  # Імпортуємо модуль конфігурації
+from datetime import datetime
+import schedule
+import asyncio
+from telegram import Bot
+
+# Налаштування логування
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+# Ініціалізація бота
+bot = Bot(token=config.BOT_TOKEN)
+
+# Змінна для зберігання поточного індексу імені
+current_name_index = 0
+
+async def send_name():
+    global current_name_index
+    
+    # Динамічно оновлюємо конфігурацію перед кожним відправленням
+    importlib.reload(config)  
+
+    today = datetime.today().weekday()  # 0 - понеділок, 6 - неділя
+
+    # Перевірка, чи це робочий день (пн-пт)
+    if today < 5:  # 0-4 - понеділок-п'ятниця
+        name = config.NAMES[current_name_index]  # Використовуємо оновлений список
+        await bot.send_message(chat_id=config.CHAT_ID, text=f"Сьогодні черговий на кухні: {name}")
+        logger.info(f"Надіслано ім'я: {name}")
+
+        # Оновлення індексу для наступного дня
+        current_name_index = (current_name_index + 1) % len(config.NAMES)
+    else:
+        logger.info("Сьогодні вихідний, повідомлення не надсилається.")
+
+async def run_scheduler():
+    while True:
+        schedule.run_pending()
+        await asyncio.sleep(1)  # Використовуємо асинхронний sleep
+
+if __name__ == "__main__":
+    logger.info("Бот запущено.")
+
+    # Планування завдання на 11:00 щодня
+    schedule.every().day.at("11:00").do(lambda: asyncio.create_task(send_name()))
+
+    # Запускаємо асинхронний цикл
+    asyncio.run(run_scheduler())
